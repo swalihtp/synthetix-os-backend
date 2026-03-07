@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  db:
+    image: postgres:16
+    container_name: synthetix_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: synthetix
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: synthetix_backend
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:

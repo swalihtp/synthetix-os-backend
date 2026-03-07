@@ -1,0 +1,53 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+*.env
+.venv/
+env/
+
+# Django specific
+db.sqlite3
+*.log
+media/
+staticfiles/
+
+# Celery & task queues
+celerybeat-schedule
+celerybeat.pid
+
+# Docker
+.dockerignore
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Coverage / testing
+.coverage
+htmlcov/
+*.cover
+*.py,cover
+.cache
+nosetests.xml
+coverage.xml
+*.mo
+*.pot
+
+# Node (if frontend assets are added later)
+node_modules/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/

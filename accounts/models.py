@@ -27,18 +27,36 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("Superuser must have is_superuser=True.")
 
         return self.create_user(email, password, **extra_fields)
+        
+class Permission(models.Model):
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=100, unique=True)
+    
+    def __str__(self):
+        return self.code
 
-
+class Role(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+    permissions = models.ManyToManyField(Permission, blank=True, related_name='roles')
+    
+    def __str__(self):
+        return self.name 
+    
 class User(AbstractUser):
-    ROLE_CHOICE = (
-        ('user', 'User'),
-        ('admin', 'Admin')
-    )
-
     username = None
+    first_name = None
+    last_name = None
+    
+    full_name=models.CharField(max_length=250,null=True,blank=True)
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=10, choices=ROLE_CHOICE, default='user')
-
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
     phone_number = models.CharField(max_length=15, null=True, blank=True)
 
@@ -55,3 +73,4 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+    

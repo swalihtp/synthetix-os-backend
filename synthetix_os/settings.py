@@ -53,6 +53,10 @@ INSTALLED_APPS = [
     
     'accounts',
     'agent',
+    'workflows',
+    'events',
+    'triggers',
+    'actions',
 ]
 
 MIDDLEWARE = [

@@ -4,7 +4,6 @@ Synthetix OS is an intelligent automation platform that acts as a digital employ
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![Django](https://img.shields.io/badge/Django-Backend-green)
-![React](https://img.shields.io/badge/React-Frontend-blue)
 ![Status](https://img.shields.io/badge/Status-Active-success)
 
 ## Why Synthetix OS?
@@ -137,7 +136,7 @@ OPENAI_API_KEY=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 
-## 📡 API Endpoints
+## API Endpoints
 
 Auth:
 POST   /api/auth/register/

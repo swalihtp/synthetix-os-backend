@@ -3,19 +3,26 @@ from .views import (
     RegisterView, LoginView, LogoutView,
     ProfileView, ChangePasswordView,
     ForgotPasswordView, ResetPasswordView,
-    GoogleLoginView
+    GoogleLoginView, EnableMFAView,
+    VerifyMFALoginView,VerifyMFASetupView
 )
 
+
 urlpatterns = [
-    path('register/', RegisterView.as_view()),
-    path('login/', LoginView.as_view()),
-    path('logout/', LogoutView.as_view()),
+    path('register/', RegisterView.as_view(),name="register"),
+    path('login/', LoginView.as_view(),name="login"),
+    path('logout/', LogoutView.as_view(),name="logout"),
 
-    path('me/', ProfileView.as_view()),
-    path('change-password/', ChangePasswordView.as_view()),
+    path('me/', ProfileView.as_view(),name="profile"),
+    path('change-password/', ChangePasswordView.as_view(),name="change-password"),
 
-    path('forgot-password/', ForgotPasswordView.as_view()),
-    path('reset-password/', ResetPasswordView.as_view()),
+    path('forgot-password/', ForgotPasswordView.as_view(),name="forgot-password"),
+    path('reset-password/', ResetPasswordView.as_view(),name="reset-password"),
     
-    path("auth/google/", GoogleLoginView.as_view())
+    path("auth/google/", GoogleLoginView.as_view(),name="google-login"),
+    
+    path("mfa/enable/", EnableMFAView.as_view(),name="enable-mfa"),
+    path("mfa/setup/verify/", VerifyMFASetupView.as_view(),name="verify-mfa-setup"),
+    path("mfa/login/verify/", VerifyMFALoginView.as_view(),name="verify-mfa-login"),
 ]
+

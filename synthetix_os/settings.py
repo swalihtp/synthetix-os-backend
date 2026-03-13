@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt.token_blacklist',
     'rest_framework',
+    'drf_spectacular',
     
     'accounts',
     'agent',
@@ -153,6 +154,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # JWT ------------------------------------------------------------------------------------------------------------
@@ -180,3 +182,12 @@ CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"
 # Google client Id----------------------------------------------------------------------
 
 GOOGLE_CLIENT_ID=os.getenv('GOOGLE_CLIENT_ID')
+
+# Spectacular Settings------------------------------------------------------------------
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Synthetix OS API',
+    'DESCRIPTION': 'API documentation for Synthetix OS',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}

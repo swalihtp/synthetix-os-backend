@@ -30,7 +30,7 @@ class CustomUserManager(BaseUserManager):
         
 class Permission(models.Model):
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=100, unique=True, db_index=True)
     
     def __str__(self):
         return self.code
@@ -57,6 +57,10 @@ class User(AbstractUser):
         blank=True,
         related_name='users'
     )
+    
+    mfa_enabled = models.BooleanField(default=False)
+    mfa_secret = models.CharField(max_length=255, blank=True, null=True)
+    
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
     phone_number = models.CharField(max_length=15, null=True, blank=True)
 

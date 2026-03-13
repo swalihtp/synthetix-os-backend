@@ -20,6 +20,8 @@ from .permissions.rbac_permission import RBACPermission
 from accounts.utils.password_reset_token import password_reset_token
 from .services.email_service import EmailService
 from .services.google_auth_service import GoogleAuthService
+from .services.mfa_service import MFAService
+
 
 User = get_user_model()
 
@@ -30,16 +32,21 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = AuthService.register_user(serializer.validated_data)
 
-        return Response({"message": "User created"}, status=201)
+        return Response(serializer.data, status=201)
 
 # LOGIN
 class LoginView(APIView):
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
+        serializer = LoginSerializer(data=request.data,context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
 
+        if user.mfa_enabled:
+            return Response({
+                "mfa_required": True,
+                "user_id": user.id
+            })
         tokens = AuthService.login_user(user)
 
         return Response(tokens)
@@ -104,7 +111,7 @@ class ForgotPasswordView(APIView):
 
         # Send email (you must configure email backend)
         print(f"Reset link: /reset-password/{uid}/{token}")
-        EmailService.send_password_reset_email('http://localhost:5173/reset-password/',uid,token,request.user)
+        EmailService.send_password_reset_email('http://localhost:5173/reset-password/',uid,token,user)
 
         return Response({"message": "Reset link sent to your registered email address"})
     
@@ -161,3 +168,57 @@ class GoogleLoginView(APIView):
                 "fullname": user.full_name
             }
         })
+        
+# Enable MFA Endpoint
+class EnableMFAView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        user = request.user
+
+        if not user.mfa_secret:
+            user.mfa_secret = MFAService.generate_secret()
+            user.save()
+
+        uri = MFAService.get_qr_uri(user)
+
+        return Response({
+            "qr_uri": uri
+        })
+      
+# Verify MFA Setup  
+class VerifyMFASetupView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        otp = request.data.get("otp")
+
+        if MFAService.verify_otp(request.user, otp):
+            request.user.mfa_enabled = True
+            request.user.save()
+
+            return Response({"message": "MFA enabled successfully"})
+
+        return Response({"error": "Invalid OTP"}, status=400)
+
+# MFA Verification During Login    
+class VerifyMFALoginView(APIView):
+
+    def post(self, request):
+
+        user_id = request.data.get("user_id")
+        otp = request.data.get("otp")
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        if not MFAService.verify_otp(user, otp):
+            return Response({"error": "Invalid OTP"}, status=400)
+
+        tokens = AuthService.login_user(user)
+
+        return Response(tokens)

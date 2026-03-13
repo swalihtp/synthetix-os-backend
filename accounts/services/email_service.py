@@ -11,18 +11,18 @@ class EmailService:
         reset_link = f"{frontend_url}/reset-password/{uid}/{token}"
 
         text_content = f"""
-Hi {user.first_name},
+        Hi {user.full_name},
 
-You requested a password reset.
+        You requested a password reset.
 
-Reset your password here:
-{reset_link}
+        Reset your password here:
+        {reset_link}
 
-If you didn’t request this, ignore this email.
-"""
+        If you didn’t request this, ignore this email.
+        """
 
         html_content = f"""
-        <p>Hi {user.first_name},</p>
+        <p>Hi {user.full_name},</p>
         <p>You requested a password reset.</p>
         <p>
             <a href="{reset_link}" style="color:blue;">

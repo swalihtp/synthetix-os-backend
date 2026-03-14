@@ -24,7 +24,11 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, Sp
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/accounts/',include('accounts.urls')),
-    path('api/agent/',include('agent.urls')),
+    # path('api/agent/',include('agent.urls')),
+    path('api/workflows/', include('workflows.urls')),
+    path('api/events/', include('events.urls')),
+    path('api/triggers/', include('triggers.urls')),
+    path('api/integrations/', include('integrations.urls')),
     
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

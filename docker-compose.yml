@@ -28,5 +28,14 @@ services:
     volumes:
       - .:/app
 
+  ai-service:
+    build: ./ai_service
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./ai_service:/app
+
 volumes:
   postgres_data:

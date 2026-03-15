@@ -3,10 +3,6 @@ from .models import Event
 
 
 def dispatch_event(event: Event):
-    """
-    Find all active workflows matching this event type
-    for this user, and trigger a WorkflowRun for each.
-    """
     matching_workflows = Workflow.objects.filter(
         trigger_type=event.event_type,
         agent__user=event.user,
@@ -26,9 +22,11 @@ def dispatch_event(event: Event):
             workflow=workflow,
             event=event,
             status='pending',
-            context={"payload": event.payload},
+            context={
+                "payload": event.payload,
+                "user_id": str(event.user.id),  # ← add this
+            },
         )
-        # Import here to avoid circular imports
         from workflows.tasks import execute_workflow
         execute_workflow.delay(str(run.id))
 

@@ -47,6 +47,8 @@ urlpatterns = [
     path('api/events/', include('events.urls')),
     path('api/triggers/', include('triggers.urls')),
     path('api/integrations/', include('integrations.urls')),
+    path('api/email/webhook/', include('triggers.email_urls')),
+
     
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     

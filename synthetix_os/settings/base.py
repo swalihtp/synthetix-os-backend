@@ -27,6 +27,9 @@ INSTALLED_APPS = [
     'actions',
 ]
 
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -37,6 +40,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+
 
 ROOT_URLCONF = 'synthetix_os.urls'
 

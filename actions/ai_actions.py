@@ -4,7 +4,6 @@ from .base import BaseAction
 
 
 def call_ai_service(endpoint: str, payload: dict) -> dict:
-    """Helper to call FastAPI AI microservice."""
     try:
         response = httpx.post(
             f"{settings.AI_SERVICE_URL}{endpoint}",
@@ -39,12 +38,24 @@ class ClassifyIntentAction(BaseAction):
 
 class GenerateReplyAction(BaseAction):
     def execute(self, config: dict, context: dict) -> dict:
+        email_body = context.get("email_body", "")
+
+        if not email_body:
+            return {
+                "reply_text": "Thank you for your email. I will get back to you shortly."
+            }
+
         result = call_ai_service("/email/reply", {
-            "email_body": context.get("email_body", ""),
+            "email_body": email_body,
             "intent": context.get("intent", "general"),
             "tone": config.get("tone", "professional"),
         })
-        return {"reply_text": result.get("reply", "")}
+
+        reply = result.get("reply", "")
+        if not reply:
+            reply = "Thank you for reaching out. I will get back to you as soon as possible."
+
+        return {"reply_text": reply}
 
 
 class ExtractContentAction(BaseAction):
@@ -52,7 +63,11 @@ class ExtractContentAction(BaseAction):
         result = call_ai_service("/social/extract", {
             "raw_text": context.get("raw_text", ""),
         })
-        return {"topic": result.get("topic"), "tone": result.get("tone")}
+        return {
+            "topic": result.get("topic"),
+            "tone": result.get("tone"),
+            "key_points": result.get("key_points", []),
+        }
 
 
 class AdaptForPlatformAction(BaseAction):

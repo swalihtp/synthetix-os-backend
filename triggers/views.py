@@ -4,6 +4,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from events.models import Event
 from events.dispatcher import dispatch_event
+from django.contrib.auth import get_user_model
+from agent.models import Agent
+import base64, json
+from django.core.cache import cache
+from integrations.gmail import get_gmail_service, get_email_details
+
+
+User = get_user_model()
 
 
 @api_view(['POST'])
@@ -16,9 +24,6 @@ def webhook_trigger(request, path):
             {"error": "user_id required in payload"},
             status=status.HTTP_400_BAD_REQUEST
         )
-
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -38,7 +43,6 @@ def webhook_trigger(request, path):
 @permission_classes([IsAuthenticated])
 def api_trigger(request, agent_id):
     """Manual trigger — authenticated user fires a workflow directly."""
-    from agent.models import Agent
     try:
         agent = Agent.objects.get(id=agent_id, user=request.user)
     except Agent.DoesNotExist:
@@ -58,7 +62,7 @@ def api_trigger(request, agent_id):
 @permission_classes([AllowAny])
 def gmail_webhook(request):
     """Gmail Pub/Sub push notification receiver."""
-    import base64, json
+    
 
     message = request.data.get('message', {})
     data = message.get('data', '')
@@ -71,8 +75,6 @@ def gmail_webhook(request):
 
     user_email = payload.get('emailAddress', '')
 
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
     try:
         user = User.objects.get(email=user_email)
     except User.DoesNotExist:
@@ -90,16 +92,9 @@ def gmail_webhook(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def gmail_pubsub_webhook(request):
-    import base64
-    import json
-    from django.contrib.auth import get_user_model
-    from events.models import Event
-    from events.dispatcher import dispatch_event
-    from django.core.cache import cache
-
-    User = get_user_model()
 
     try:
+        print('something is comming  ------------------------------------------------------------------------------')
         message = request.data.get('message', {})
         data = message.get('data', '')
         message_id = message.get('messageId', '') or message.get('message_id', '')
@@ -165,7 +160,6 @@ def gmail_pubsub_webhook(request):
 def fetch_latest_email(user, history_id: str) -> dict:
     """Fetch the latest unread email from Gmail API."""
     try:
-        from integrations.gmail import get_gmail_service, get_email_details
         service = get_gmail_service(user)
 
         # Get list of recent messages

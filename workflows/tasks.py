@@ -1,5 +1,11 @@
 from celery import shared_task
 from django.utils import timezone
+from integrations.models import Integration
+from integrations.gmail_watch import register_gmail_watch
+from django.contrib.auth import get_user_model
+from celery.schedules import crontab
+
+User=get_user_model()
 
 
 @shared_task(bind=True, max_retries=3)
@@ -48,3 +54,22 @@ def execute_workflow(self, run_id: str):
     finally:
         run.finished_at = timezone.now()
         run.save()
+        
+
+@shared_task
+def renew_gmail_watches():
+    """Renew Gmail watch for all users with Gmail integration."""
+
+
+    
+    integrations = Integration.objects.filter(
+        provider='gmail',
+        is_active=True
+    )
+
+    for integration in integrations:
+        try:
+            register_gmail_watch(integration.user)
+            print(f"[Gmail Watch] Renewed for {integration.user.email}")
+        except Exception as e:
+            print(f"[Gmail Watch] Failed for {integration.user.email}: {e}")

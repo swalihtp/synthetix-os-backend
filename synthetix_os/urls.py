@@ -47,6 +47,7 @@ urlpatterns = [
     path('api/events/', include('events.urls')),
     path('api/triggers/', include('triggers.urls')),
     path('api/integrations/', include('integrations.urls')),
+    
     path('api/email/webhook/', include('triggers.email_urls')),
 
     

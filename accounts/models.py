@@ -19,6 +19,7 @@ class CustomUserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("is_verified", True)
 
         if extra_fields.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
@@ -50,13 +51,7 @@ class User(AbstractUser):
     
     full_name=models.CharField(max_length=250,null=True,blank=True)
     email = models.EmailField(unique=True)
-    role = models.ForeignKey(
-        Role,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='users'
-    )
+    role = models.ForeignKey(Role,on_delete=models.SET_NULL,null=True,blank=True,related_name='users')
     
     mfa_enabled = models.BooleanField(default=False)
     mfa_secret = models.CharField(max_length=255, blank=True, null=True)

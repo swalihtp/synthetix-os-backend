@@ -45,15 +45,40 @@ class GenerateReplyAction(BaseAction):
                 "reply_text": "Thank you for your email. I will get back to you shortly."
             }
 
+        # Build extra context for reply
+        extra_context = ""
+        if context.get("event_created"):
+            meeting_time = context.get("meeting_time", "")
+            meet_link = context.get("meet_link", "")
+            extra_context = f"\nMeeting scheduled for: {meeting_time}\nMeet link: {meet_link}"
+
+        if context.get("available_slots") and not context.get("event_created"):
+            slots = context.get("available_slots", [])
+            slot_list = "\n".join([s.get("display", "") for s in slots[:3]])
+            extra_context = f"\nAvailable slots:\n{slot_list}"
+
         result = call_ai_service("/email/reply", {
             "email_body": email_body,
             "intent": context.get("intent", "general"),
             "tone": config.get("tone", "professional"),
+            "extra_context": extra_context,
         })
 
         reply = result.get("reply", "")
+
+        # Build contextual fallback reply
         if not reply:
-            reply = "Thank you for reaching out. I will get back to you as soon as possible."
+            if context.get("event_created"):
+                meeting_time = context.get("meeting_time", "")
+                meet_link = context.get("meet_link", "")
+                reply = (
+                    f"Thank you for reaching out. I have scheduled our meeting for "
+                    f"{meeting_time}.\n\n"
+                    f"You can join via Google Meet: {meet_link}\n\n"
+                    f"Looking forward to speaking with you!"
+                )
+            else:
+                reply = "Thank you for reaching out. I will get back to you as soon as possible."
 
         return {"reply_text": reply}
 

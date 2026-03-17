@@ -1,6 +1,10 @@
 from .base import BaseAction
 from integrations.models import Integration
+from django.contrib.auth import get_user_model
+from integrations.gmail import get_gmail_service, get_email_details, send_reply
 
+
+User = get_user_model()
 
 class GmailFetchEmailAction(BaseAction):
     def execute(self, config: dict, context: dict) -> dict:
@@ -26,9 +30,6 @@ class GmailFetchEmailAction(BaseAction):
 
         if message_id and user_id:
             try:
-                from django.contrib.auth import get_user_model
-                from integrations.gmail import get_gmail_service, get_email_details
-                User = get_user_model()
                 user = User.objects.get(id=user_id)
                 service = get_gmail_service(user)
                 email_data = get_email_details(service, message_id)
@@ -66,9 +67,6 @@ class GmailSendReplyAction(BaseAction):
         # Try real Gmail send if user has integration connected
         if user_id and thread_id and sender:
             try:
-                from django.contrib.auth import get_user_model
-                from integrations.gmail import get_gmail_service, send_reply
-                User = get_user_model()
                 user = User.objects.get(id=user_id)
                 service = get_gmail_service(user)
                 send_reply(service, thread_id, sender, subject, reply_text)

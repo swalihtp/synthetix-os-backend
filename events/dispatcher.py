@@ -24,7 +24,8 @@ def dispatch_event(event: Event):
             status='pending',
             context={
                 "payload": event.payload,
-                "user_id": str(event.user.id),  # ← add this
+                "user_id": str(event.user.id),
+                "workflow_name": workflow.name,
             },
         )
         from workflows.tasks import execute_workflow

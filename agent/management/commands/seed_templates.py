@@ -56,6 +56,16 @@ TEMPLATES = [
                 "order": 5,
                 "on_failure": "stop",
             },
+            {
+                "step_type": "system",
+                "action": "system.notify_user",
+                "config": {
+                    "channel": "telegram",
+                    "message": "",
+                },
+                "order": 6,
+                "on_failure": "continue",
+            },
         ],
     },
     {

@@ -1,18 +1,31 @@
+import json
+
+
+
 def chat(system_prompt: str, user_message: str, json_mode: bool = False) -> str:
     prompt_lower = system_prompt.lower()
 
-    if "email analysis" in prompt_lower or "analyze" in prompt_lower:
+    # IMPORTANT: workflow check must come FIRST before email analysis
+    if "workflow automation expert" in prompt_lower or (
+        "workflow" in prompt_lower and "trigger" in prompt_lower
+    ):
+        return _workflow_stub(user_message)
+
+    elif "email analysis" in prompt_lower:
         return _email_analysis_stub(user_message)
+
     elif "intent" in prompt_lower or "classify" in prompt_lower:
         return _intent_stub(user_message)
+
     elif "reply" in prompt_lower or "email writer" in prompt_lower:
         return _reply_stub(user_message)
-    elif "workflow" in prompt_lower and "json" in prompt_lower:
-        return _workflow_stub(user_message)
+
     elif "extract" in prompt_lower or "social media content" in prompt_lower:
         return _social_extract_stub(user_message)
+
     elif "adapt" in prompt_lower or "copywriter" in prompt_lower:
         return _social_adapt_stub(system_prompt, user_message)
+
     else:
         return '{"result": "stub response", "status": "ok"}'
 
@@ -55,28 +68,82 @@ def _reply_stub(text: str) -> str:
 
 
 def _workflow_stub(text: str) -> str:
-    return '''{
-        "name": "AI Generated Workflow",
-        "trigger_type": "api.trigger",
-        "trigger_config": {},
-        "steps": [
-            {
-                "step_type": "ai",
-                "action": "ai.analyze_email",
-                "config": {},
-                "order": 1,
-                "on_failure": "stop"
-            },
-            {
-                "step_type": "ai",
-                "action": "ai.generate_reply",
-                "config": {"tone": "professional"},
-                "order": 2,
-                "on_failure": "stop"
-            }
-        ]
-    }'''
+    text_lower = text.lower()
 
+    # Meeting related
+    if any(word in text_lower for word in ["meeting", "schedule", "calendar", "appointment"]):
+        return '''{
+            "name": "Auto Meeting Scheduler",
+            "trigger_type": "gmail.email_received",
+            "trigger_config": {},
+            "steps": [
+                {"step_type": "system", "action": "gmail.fetch_email", "config": {}, "order": 1, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.detect_meeting_intent", "config": {}, "order": 2, "on_failure": "stop"},
+                {"step_type": "system", "action": "calendar.check_availability", "config": {"days_ahead": 7}, "order": 3, "on_failure": "stop"},
+                {"step_type": "system", "action": "calendar.create_event", "config": {"duration_minutes": 30}, "order": 4, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.generate_reply", "config": {"tone": "friendly"}, "order": 5, "on_failure": "stop"},
+                {"step_type": "system", "action": "gmail.send_reply", "config": {}, "order": 6, "on_failure": "continue"},
+                {"step_type": "system", "action": "system.notify_user", "config": {"channel": "telegram"}, "order": 7, "on_failure": "continue"}
+            ]
+        }'''
+
+    # Email reply related
+    elif any(word in text_lower for word in ["email", "reply", "respond", "inbox"]):
+        return '''{
+            "name": "Smart Email Responder",
+            "trigger_type": "gmail.email_received",
+            "trigger_config": {},
+            "steps": [
+                {"step_type": "system", "action": "gmail.fetch_email", "config": {}, "order": 1, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.analyze_email", "config": {}, "order": 2, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.classify_intent", "config": {"detect": ["meeting_request", "complaint", "general", "urgent"]}, "order": 3, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.generate_reply", "config": {"tone": "professional"}, "order": 4, "on_failure": "stop"},
+                {"step_type": "system", "action": "gmail.send_reply", "config": {}, "order": 5, "on_failure": "continue"},
+                {"step_type": "system", "action": "system.notify_user", "config": {"channel": "telegram"}, "order": 6, "on_failure": "continue"}
+            ]
+        }'''
+
+    # Social media related
+    elif any(word in text_lower for word in ["social", "twitter", "linkedin", "instagram", "post", "content"]):
+        return '''{
+            "name": "Social Media Scheduler",
+            "trigger_type": "api.trigger",
+            "trigger_config": {},
+            "steps": [
+                {"step_type": "ai", "action": "ai.extract_content", "config": {}, "order": 1, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.adapt_twitter", "config": {"platform": "twitter", "max_chars": 280}, "order": 2, "on_failure": "continue"},
+                {"step_type": "ai", "action": "ai.adapt_linkedin", "config": {"platform": "linkedin"}, "order": 3, "on_failure": "continue"},
+                {"step_type": "ai", "action": "ai.adapt_instagram", "config": {"platform": "instagram"}, "order": 4, "on_failure": "continue"},
+                {"step_type": "system", "action": "system.schedule_posts", "config": {"platforms": ["twitter", "linkedin", "instagram"]}, "order": 5, "on_failure": "stop"},
+                {"step_type": "system", "action": "system.notify_user", "config": {"channel": "telegram"}, "order": 6, "on_failure": "continue"}
+            ]
+        }'''
+
+    # Notification / alert related
+    elif any(word in text_lower for word in ["notify", "alert", "telegram", "notification"]):
+        return '''{
+            "name": "Email Alert System",
+            "trigger_type": "gmail.email_received",
+            "trigger_config": {},
+            "steps": [
+                {"step_type": "system", "action": "gmail.fetch_email", "config": {}, "order": 1, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.classify_intent", "config": {"detect": ["urgent", "complaint", "general"]}, "order": 2, "on_failure": "stop"},
+                {"step_type": "system", "action": "system.notify_user", "config": {"channel": "telegram"}, "order": 3, "on_failure": "stop"}
+            ]
+        }'''
+
+    # Default
+    else:
+        return '''{
+            "name": "Custom Workflow",
+            "trigger_type": "api.trigger",
+            "trigger_config": {},
+            "steps": [
+                {"step_type": "ai", "action": "ai.analyze_email", "config": {}, "order": 1, "on_failure": "stop"},
+                {"step_type": "ai", "action": "ai.generate_reply", "config": {"tone": "professional"}, "order": 2, "on_failure": "stop"},
+                {"step_type": "system", "action": "system.notify_user", "config": {"channel": "telegram"}, "order": 3, "on_failure": "continue"}
+            ]
+        }'''
 
 def _social_extract_stub(text: str) -> str:
     return '''{

@@ -29,27 +29,58 @@ Return only valid JSON."""
 
 
 def workflow_generation_prompt() -> str:
-    return """You are a workflow automation expert.
-Convert the user's natural language goal into a structured workflow JSON.
-Available triggers: gmail.email_received, webhook.received, api.trigger, schedule.cron
-Available actions: ai.analyze_email, ai.classify_intent, ai.generate_reply, 
-                   ai.extract_content, ai.adapt_twitter, ai.adapt_linkedin,
-                   ai.adapt_instagram, gmail.send_reply, gmail.fetch_email,
-                   calendar.check_availability, calendar.create_event,
-                   slack.send_message, telegram.send_message,
-                   system.schedule_posts, system.notify_user
-
-Return a JSON object with:
-- name: workflow name
-- trigger_type: one trigger from the list above
-- trigger_config: dict of trigger settings
-- steps: list of steps, each with:
-    - step_type: "ai" or "system"
-    - action: one action from the list above
-    - config: dict of action settings
-    - order: integer starting from 1
-    - on_failure: "stop" or "continue"
-Return only valid JSON."""
+    return """You are a workflow automation expert for Synthetix OS.
+    Convert the user's natural language goal into a structured workflow JSON.
+    
+    AVAILABLE TRIGGERS (use exactly one):
+    - gmail.email_received — when a new email arrives
+    - webhook.received — when an HTTP webhook is called  
+    - api.trigger — when manually triggered via API
+    - schedule.cron — on a schedule
+    
+    AVAILABLE ACTIONS (use in steps):
+    AI Actions:
+    - ai.analyze_email — analyze email content and sentiment
+    - ai.classify_intent — classify intent (meeting_request, complaint, general, urgent)
+    - ai.generate_reply — generate a professional email reply
+    - ai.extract_content — extract topic and key points from text
+    - ai.adapt_twitter — adapt content for Twitter (280 chars)
+    - ai.adapt_linkedin — adapt content for LinkedIn
+    - ai.adapt_instagram — adapt content for Instagram
+    - ai.detect_meeting_intent — detect if email is requesting a meeting
+    
+    System Actions:
+    - gmail.fetch_email — fetch email content
+    - gmail.send_reply — send email reply
+    - calendar.check_availability — check Google Calendar free slots
+    - calendar.create_event — create a calendar event
+    - slack.send_message — send Slack message
+    - telegram.send_message — send Telegram notification
+    - system.schedule_posts — schedule social media posts
+    - system.notify_user — notify user via Telegram
+    
+    RULES:
+    1. Always start with gmail.fetch_email if trigger is gmail.email_received
+    2. Always end with system.notify_user for important workflows
+    3. step_type is "ai" for AI actions, "system" for system actions
+    4. on_failure is "stop" for critical steps, "continue" for optional ones
+    5. order starts at 1 and increments by 1
+    
+    Return ONLY valid JSON with this exact structure:
+    {
+      "name": "workflow name",
+      "trigger_type": "trigger from list above",
+      "trigger_config": {},
+      "steps": [
+        {
+          "step_type": "ai or system",
+          "action": "action from list above",
+          "config": {},
+          "order": 1,
+          "on_failure": "stop or continue"
+        }
+      ]
+    }"""
 
 
 def social_extract_prompt() -> str:

@@ -1,186 +1,267 @@
-## Synthetix OS – AI-Powered Automation Platform
+# Synthetix OS Backend
 
-Synthetix OS is an intelligent automation platform that acts as a digital employee, allowing users to automate tasks across applications like Gmail, Google Sheets, and Telegram using AI-powered agents.
+Synthetix OS is a Django-based automation platform with a separate FastAPI AI microservice. It is built to run AI-powered agents, workflow executions, Gmail-driven automations, document ingestion, and admin analytics from one backend.
 
-![Python](https://img.shields.io/badge/Python-3.10-blue)
-![Django](https://img.shields.io/badge/Django-Backend-green)
-![Status](https://img.shields.io/badge/Status-Active-success)
+## What This Project Contains
 
-## Why Synthetix OS?
+- `accounts/` for email-based auth, JWT login, password reset, MFA, Google login, and email verification
+- `agent/` for user agents, built-in agent templates, agent documents, and agent execution tracking
+- `workflows/` for workflow definitions, workflow executions, email processing, resume analysis, meeting notes, and market intelligence orchestration
+- `integrations/` for Gmail OAuth, Gmail watch registration, and integration status tracking
+- `persona/` for user persona and AI preference profiles
+- `dashboard/` for the authenticated user dashboard
+- `system_admin/` for system admin statistics, user management, invitations, and usage analytics
+- `triggers/` for Gmail Pub/Sub webhook handling
+- `ai_service/` for the standalone FastAPI service that performs LLM-powered analysis tasks
 
-Instead of manually switching between apps and repeating tasks, Synthetix OS allows users to automate real-world workflows using AI agents.
+## High-Level Architecture
 
-👉 Example:
-When a new email arrives → AI reads it → generates a reply → sends it automatically.
+- Django REST Framework handles the main API surface.
+- JWT authentication is used for API access.
+- Channels provides websocket updates for agent workflows.
+- Celery handles asynchronous workflow jobs.
+- Redis is used for Celery broker/result backend and channel layers.
+- PostgreSQL stores application data.
+- The AI microservice runs separately on port `8001` and is called by the Django app for model-driven tasks.
 
-This reduces manual work and improves productivity.
+## Main Capabilities
 
-##  Problem
+- Email automation with intent detection, retrieval-based context, reply generation, and human review support
+- Market intelligence workflows that research a company, competitors, trends, sentiment, SWOT, and generate PDF reports
+- Resume analysis with structured feedback, skill evaluation, and ATS scoring
+- Meeting note generation from transcripts with topics, decisions, action items, and summaries
+- Gmail integration with OAuth and watch registration
+- User persona capture for personalized AI behavior
+- System admin analytics for workflow execution and AI usage
+- Real-time workflow updates over websockets
 
-Modern workflows require switching between multiple applications and performing repetitive tasks manually.
+## Workflow Overview
 
-Examples:
-- Responding to emails
-- Updating spreadsheets
-- Managing schedules
-- Handling customer queries
+- Email workflow: Gmail notification -> email processing -> intent analysis -> context retrieval -> reply generation -> optional human review -> send reply -> store memory
+- Resume workflow: upload resume -> extract text -> analyze structure and skills -> score ATS fit -> store execution result
+- Meeting notes workflow: upload transcript -> extract text -> detect topics and decisions -> generate summary -> store execution result
+- Market intelligence workflow: load configuration -> fetch company and competitor data -> run analysis stages -> generate report -> render PDF -> upload to S3 -> send report
 
-This leads to:
-- Time consumption
-- Human errors
-- Low productivity
+## Backend API Routes
 
-##  Solution
+The Django app exposes the following route groups:
 
-Synthetix OS introduces AI Agents that can:
+- `GET /api/schema/`
+- `GET /api/docs/swagger/`
+- `GET /api/docs/redoc/`
+- `POST /api/token/`
+- `/api/auth/`
+- `/api/agent/`
+- `/api/workflows/`
+- `/api/integrations/`
+- `/api/email/webhook/`
+- `/api/persona/`
+- `/api/dashboard/`
+- `/api/system-admin/`
 
-- Think using AI
-- Remember past interactions
-- Perform actions across apps
-- Execute workflows automatically
+Important route examples:
 
-It acts like a digital employee working on behalf of the user.
+- `POST /api/auth/register/`
+- `POST /api/auth/login/`
+- `POST /api/auth/logout/`
+- `POST /api/auth/refresh/`
+- `GET|PUT /api/auth/me/`
+- `POST /api/auth/mfa/enable/`
+- `POST /api/auth/mfa/setup/verify/`
+- `POST /api/auth/mfa/login/verify/`
+- `POST /api/auth/auth/google/`
+- `GET /api/agent/<uuid>/dashboard/`
+- `POST /api/agent/<uuid>/...` via the agent router
+- `POST /api/workflows/create-agent-and-workflow-from-template/`
+- `POST /api/workflows/resume-executions/analyze/`
+- `POST /api/workflows/resume-executions/retry/`
+- `POST /api/workflows/meeting-notes-executions/analyze/`
+- `POST /api/workflows/meeting-summary-executions/retry/`
+- `GET /api/integrations/gmail/connect/`
+- `GET /api/integrations/gmail/callback/`
+- `POST /api/integrations/gmail/watch/`
+- `GET /api/system-admin/dashboard/statistics/`
+- `POST /api/system-admin/analytics/snapshot/`
+- `GET /api/system-admin/workflows/stats/`
+- `GET /api/system-admin/ai-usage/dashboard/`
+- `GET /api/system-admin/email-activity/`
+- `GET /api/system-admin/users/`
+- `GET /api/system-admin/users/<uuid>/`
+- `PATCH /api/system-admin/users/<uuid>/block/`
+- `PATCH /api/system-admin/users/<uuid>/activate/`
+- `DELETE /api/system-admin/users/<uuid>/delete/`
+- `POST /api/system-admin/create-admin/`
+- `POST /api/system-admin/accept-invite/`
 
-##  Features
+Websocket:
 
--  AI Agents (Digital Employees)
--  Memory System (Context-aware AI)
--  Workflow Automation
--  Trigger System (Webhook, Schedule, Events)
--  Integrations (Gmail, Google Sheets, Telegram)
--  Secure OAuth-based Access
--  Scalable Architecture (Celery, Redis)
+- `ws/agents/<agent_id>/`
 
+## AI Service Routes
 
-## Architecture
+The FastAPI service in `ai_service/` exposes:
 
-User → Trigger → Workflow → Agent → AI → Action → Result
+- `GET /health`
+- `POST /api/analyze-intention`
+- `POST /api/process-email`
+- `POST /api/store-doc`
+- `POST /api/analyze-resume`
+- `POST /api/generate-meeting-summary`
+- `POST /api/summarize`
+- `POST /api/execute`
+- `POST /api/documents/ingest`
+- `POST /api/market-inteligence/generate-plan`
+- `POST /api/market-inteligence/analyze-market`
+- `POST /api/market-inteligence/analyze-competitors`
+- `POST /api/market-inteligence/analyze-trends`
+- `POST /api/market-inteligence/analyze-sentiment`
+- `POST /api/market-inteligence/analyze-swot`
+- `POST /api/market-inteligence/generate-report`
 
-Components:
-- Agent Module (Brain)
-- Workflow Engine (Execution)
-- Trigger System (Start events)
-- Integration Layer (External apps)
+Note: the market intelligence prefix is spelled `market-inteligence` in the code.
 
-## Tech Stack
+## Built-In Agent Templates
+
+The repository includes seeded templates for:
+
+- Smart Email Agent
+- Market Intelligence Agent
+- Resume Analyzer
+- Meeting Notes Generator
+
+Use the seeding command after creating a user:
+
+```bash
+python manage.py seed_templates --email your@email.com
+```
+
+RBAC seed command:
+
+```bash
+python manage.py seed_rbac
+```
+
+## Local Setup
+
+### Recommended: Docker Compose
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- PostgreSQL with pgvector
+- Redis
+- Django backend on port `8000`
+- Celery worker
+- Celery beat
+- FastAPI AI service on port `8001`
+
+### Manual Setup
 
 Backend:
-- Python
-- Django
-- Django REST Framework
-- PostgreSQL
-- Redis
-- Celery
 
-Frontend:
-- React.js
-
-AI:
-- LLM APIs
-- Embeddings (Vector Search)
-
-Infrastructure:
-- Docker (planned)
-- Cloud Deployment
-
-
-## Project Structure (Backend)
-
-accounts/        # Authentication & users
-agents/          # Agent management
-workflows/       # Workflow engine
-triggers/        # Trigger system
-executions/      # Workflow execution tracking
-integrations/    # External APIs (Gmail, etc.)
-ai/              # LLM interaction
-common/          # Shared utilities
-
-
-## Setup Instructions
-
-### 1. Clone the repository
-git clone https://github.com/your-username/synthetix-backend.git
-
-### 2. Navigate
-cd synthetix-backend
-
-### 3. Create virtual environment
+```bash
 python -m venv venv
-source venv/bin/activate   # Linux/Mac
-venv\Scripts\activate      # Windows
-
-### 4. Install dependencies
-pip install -r requirements.txt
-
-### 5. Setup environment variables
-cp .env.example .env
-
-### 6. Run migrations
+venv\Scripts\activate
+pip install -r requirements/core.txt
+pip install -r requirements/integrations.txt
 python manage.py migrate
+python manage.py runserver 0.0.0.0:8000
+```
 
-### 7. Start server
-python manage.py runserver
+Celery:
+
+```bash
+celery -A synthetix_os worker --loglevel=info
+celery -A synthetix_os beat --loglevel=info
+```
+
+AI service:
+
+```bash
+cd ai_service
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8001
+```
+
+## Settings
+
+The Django project uses these settings modules:
+
+- `synthetix_os.settings.dev` for local development
+- `synthetix_os.settings.prod` for production
+
+The default ASGI and Celery entry points point to the dev settings module unless overridden by `DJANGO_SETTINGS_MODULE`.
 
 ## Environment Variables
 
-Create a `.env` file:
+Backend and shared runtime:
 
-SECRET_KEY=your_secret
-DEBUG=True
+- `SECRET_KEY`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+- `REDIS_URL`
+- `AI_SERVICE_URL`
+- `FRONTEND_URL`
+- `EMAIL_HOST_USER`
+- `EMAIL_HOST_PASSWORD`
+- `HF_API_KEY`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_STORAGE_BUCKET_NAME`
+- `AWS_S3_SIGNATURE_NAME`
+- `AWS_S3_REGION_NAME`
+- `LAMBDA_API_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_CLOUD_PROJECT_ID`
+- `TELEGRAM_BOT_TOKEN`
+- `TAVILY_API_KEY`
+- `FIRECRAWL_API_KEY`
 
-DB_NAME=...
-DB_USER=...
-DB_PASSWORD=...
+AI service:
 
-OPENAI_API_KEY=...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+- `OPEN_ROUTER_API_KEY`
+- `OPENAI_API_KEY`
+- `GOOGLE_API_KEY`
 
-## API Endpoints
+Production-only or deployment-specific:
 
-Auth:
-POST   /api/auth/register/
-POST   /api/auth/login/
+- `ALLOWED_HOSTS`
+- `CORS_ORIGINS`
 
-Agents:
-POST   /api/agents/
-GET    /api/agents/
+## Key Data Models
 
-Workflows:
-POST   /api/workflows/
+- `accounts.User`, `Role`, `Permission`, `EmailVerification`
+- `agent.BuiltInAgent`, `Agent`, `AgentDocuments`, `AgentExecution`, `S3MarketIntelligenceReport`
+- `workflows.Workflow`, `WorkflowExecution`, `EmailExecution`, `EmailAttachment`, `WorkflowForHumanReview`, `ResumeExecution`, `MeetingSummaryExecution`, `AIUsageLog`, `DailyAIUsageSnapshot`
+- `integrations.Integration`, `V2Integration`, `ProcessedEmail`, `GmailSync`
+- `persona.UserPersona`
+- `system_admin.AdminInvitation`
 
-Triggers:
-POST   /api/triggers/
+## Testing
 
-Webhook:
-POST   /api/triggers/webhook/{path}/
+```bash
+pytest
+```
 
+The repository also includes focused tests under `accounts/`, `agent/`, `workflows/`, `integrations/`, `dashboard/`, `system_admin/`, and `triggers/`.
 
-## Roadmap
+## Notes
 
-- [x] Authentication system
-- [x] Agent management module
-- [x] Workflow engine (basic)
-- [ ] Trigger system (in progress)
-- [ ] Gmail integration
-- [ ] Google Sheets automation
-- [ ] AI decision engine improvements
-- [ ] Multi-agent collaboration
-- [ ] SaaS billing system
-
-
-## Screenshots
-
-Coming soon...
+- The backend uses `channels_redis` for websocket groups.
+- The market intelligence workflow uses external services such as Tavily, Firecrawl, S3, and document extraction helpers.
+- Uploaded files and generated reports are stored in the repository's media/report directories during development.
+- The repo includes sample generated reports and agent documents, which are useful for testing but not required for a clean deployment.
 
 ## License
 
-MIT License
-
-## Future Vision
-
-Synthetix OS aims to become a full AI workforce platform where multiple agents collaborate to handle business operations autonomously.
-
-## Status
-
-This project is currently under active development.
+MIT

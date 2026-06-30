@@ -1,51 +1,16 @@
-# from django.urls import path
-# from .views import (
-#     AgentCreateView,
-#     AgentListView,
-#     AgentStatusUpdateView,
-#     GmailWebhookView,
-# )
-
-# app_name = "agents"
-
-# urlpatterns = [
-
-#     # -------------------------
-#     # Agent CRUD
-#     # -------------------------
-
-#     path("",AgentListView.as_view(),name="agent-list"),
-
-#     path("create/",AgentCreateView.as_view(),name="agent-create"),
-
-#     # path("<uuid:pk>/",AgentDetailView.as_view(),name="agent-detail"),
-
-#     path("<uuid:pk>/status/",AgentStatusUpdateView.as_view(),name="agent-status-update"),
-
-#     # path("<uuid:pk>/delete/",AgentDeleteView.as_view(),name="agent-delete"),
-
-#     # -------------------------
-#     # Agent Runs (Execution Logs)
-#     # -------------------------
-
-#     # path("<uuid:pk>/runs/",AgentRunListView.as_view(),name="agent-run-list"),
-
-#     # path("runs/<uuid:run_id>/",AgentRunDetailView.as_view(),name="agent-run-detail"),
-
-#     # -------------------------
-#     # Webhooks
-#     # -------------------------
-
-#     path("webhooks/gmail/",GmailWebhookView.as_view(),name="gmail-webhook"),
-# ]
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import AgentViewSet
+from .views import AgentViewSet, BuiltInAgentViewSet, EmailAgentDashboardAPIView
 
 router = DefaultRouter()
-router.register(r'', AgentViewSet, basename='agent')
+router.register(r"builtin", BuiltInAgentViewSet, basename="builtin-agent")
+router.register(r"", AgentViewSet, basename="agent")
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path(
+        "<uuid:agent_id>/dashboard/",
+        EmailAgentDashboardAPIView.as_view(),
+        name="email-agent-dashboard",
+    ),
+    path("", include(router.urls)),
 ]

@@ -2,5 +2,5 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.gmail_pubsub_webhook, name='gmail-pubsub-webhook'),
+    path("", views.NewGmailPubSubWebhookView.as_view(), name="gmail-pubsub-webhook"),
 ]

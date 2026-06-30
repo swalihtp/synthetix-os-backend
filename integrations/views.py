@@ -2,18 +2,19 @@ import os
 import base64
 import json
 from rest_framework import viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from .models import Integration
 from .serializers import IntegrationSerializer
+from django.shortcuts import redirect
 from google_auth_oauthlib.flow import Flow
-from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 import requests as req
 from integrations.gmail_watch import register_gmail_watch
 from google_auth_oauthlib.flow import Flow
 from django.contrib.auth import get_user_model
-from requests_oauthlib import OAuth2Session
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 
 User=get_user_model()
 
@@ -37,14 +38,24 @@ class IntegrationViewSet(viewsets.ReadOnlyModelViewSet):
             for provider in providers
         })
 
-@api_view(['GET'])
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def gmail_connect(request):
-    """Step 1 — return Google OAuth consent screen URL."""
-
-    # Encode user_id inside state
+    """Step 1 — return Google OAuth consent screen URL with agent_id in state."""
+    
+    agent_id = request.data.get('agent_id')  # ✅ Get agent_id from request
+    
+    if not agent_id:
+        return Response({"error": "agent_id is required"}, status=400)
+    
+    # ✅ Encode BOTH user_id AND agent_id in state
     state_data = base64.urlsafe_b64encode(
-        json.dumps({"user_id": str(request.user.id)}).encode()
+        json.dumps({
+            "user_id": str(request.user.id),
+            "agent_id": agent_id  # ✅ Include this
+        }).encode()
     ).decode()
 
     flow = Flow.from_client_config(
@@ -64,6 +75,7 @@ def gmail_connect(request):
             'https://www.googleapis.com/auth/userinfo.email',
         ],
     )
+    # print('flow object:', flow.__dict__)
     flow.redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
 
     auth_url, _ = flow.authorization_url(
@@ -71,50 +83,60 @@ def gmail_connect(request):
         include_granted_scopes='true',
         prompt='consent',
         state=state_data,
-        code_challenge_method=None,  # disable PKCE
+        code_challenge_method=None,
     )
+    
+    # print('Generated auth_url:', auth_url)
 
-    # Remove code_challenge from URL if present
+    # Remove PKCE params
+    from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
     parsed = urlparse(auth_url)
+    # print('Parsed auth_url:', parsed)
     params = parse_qs(parsed.query, keep_blank_values=True)
+    # print('Parsed query params before cleanup:', params)
     params.pop('code_challenge', None)
     params.pop('code_challenge_method', None)
     clean_params = {k: v[0] for k, v in params.items()}
     clean_url = urlunparse(parsed._replace(query=urlencode(clean_params)))
 
-    return Response({"auth_url": clean_url})
+    return Response({"authorization_url": clean_url})
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def gmail_callback(request):
-    """Step 2 — Google redirects here, exchange code for tokens."""
+    """Step 2 — Exchange code for tokens and redirect back to playbook page."""
     
     code = request.GET.get('code')
     state = request.GET.get('state')
+    
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
+    # Handle errors
     if not code:
-        return Response({"error": "No code received from Google."}, status=400)
-
+        return redirect(f"{frontend_url}?error=no_code")
+    
     if not state:
-        return Response({"error": "No state received from Google."}, status=400)
+        return redirect(f"{frontend_url}?error=no_state")
 
-    # Decode user_id from state
+    # ✅ Decode BOTH user_id AND agent_id from state
     try:
         state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
         user_id = state_data.get("user_id")
-    except Exception:
-        return Response({"error": "Invalid state parameter."}, status=400)
+        agent_id = state_data.get("agent_id")  # ✅ Extract agent_id
+    except Exception as e:
+        return redirect(f"{frontend_url}?error=invalid_state")
 
     if not user_id:
-        return Response({"error": "User ID missing from state."}, status=400)
+        return redirect(f"{frontend_url}?error=no_user_id")
 
+    # Get user
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"error": "User not found."}, status=404)
+        return redirect(f"{frontend_url}?error=user_not_found")
 
-    # Exchange code for tokens manually without PKCE
+    # Exchange code for tokens
     try:
         token_response = req.post(
             'https://oauth2.googleapis.com/token',
@@ -129,18 +151,16 @@ def gmail_callback(request):
         token_data = token_response.json()
 
         if 'error' in token_data:
-            return Response(
-                {"error": f"Token exchange failed: {token_data['error_description']}"},
-                status=400
-            )
+            error_msg = token_data.get('error_description', 'token_exchange_failed')
+            return redirect(f"{frontend_url}?error={error_msg}")
 
         access_token = token_data.get('access_token')
         refresh_token = token_data.get('refresh_token', '')
 
     except Exception as e:
-        return Response({"error": f"Token exchange failed: {str(e)}"}, status=400)
+        return redirect(f"{frontend_url}?error=exception")
 
-    # Save tokens to Integration model
+    # ✅ Save tokens to database
     Integration.objects.update_or_create(
         user=user,
         provider='gmail',
@@ -150,11 +170,14 @@ def gmail_callback(request):
             'is_active': True,
         }
     )
+    
+    register_gmail_watch(user)
 
-    return Response({
-        "message": "Gmail connected successfully!",
-        "user": user.email,
-    })
+    # ✅ Redirect back to the EXACT playbook page they came from
+    if agent_id:
+        return redirect(f"{frontend_url}/playbooks/{agent_id}?oauth=success")
+    else:
+        return redirect(f"{frontend_url}/workflows?oauth=success")
 
 
 @api_view(['POST'])
@@ -168,125 +191,5 @@ def gmail_watch(request):
             "expiration": result.get('expiration'),
             "historyId": result.get('historyId'),
         })
-    except Exception as e:
-        return Response({"error": str(e)}, status=400)
-    
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def calendar_connect(request):
-    """Step 1 — return Google Calendar OAuth consent screen URL."""
-    import base64
-    import json
-    from google_auth_oauthlib.flow import Flow
-    from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
-
-    state_data = base64.urlsafe_b64encode(
-        json.dumps({"user_id": str(request.user.id), "provider": "google_calendar"}).encode()
-    ).decode()
-
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
-                "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI",
-                    os.environ.get("GOOGLE_REDIRECT_URI"))],
-            }
-        },
-        scopes=[
-            'https://www.googleapis.com/auth/calendar',
-            'https://www.googleapis.com/auth/calendar.events',
-            'https://www.googleapis.com/auth/userinfo.email',
-        ],
-    )
-    flow.redirect_uri = os.environ.get(
-        "GOOGLE_CALENDAR_REDIRECT_URI",
-        os.environ.get("GOOGLE_REDIRECT_URI")
-    )
-
-    auth_url, _ = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true',
-        prompt='consent',
-        state=state_data,
-    )
-
-    # Remove PKCE params
-    parsed = urlparse(auth_url)
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    params.pop('code_challenge', None)
-    params.pop('code_challenge_method', None)
-    clean_params = {k: v[0] for k, v in params.items()}
-    clean_url = urlunparse(parsed._replace(query=urlencode(clean_params)))
-
-    return Response({"auth_url": clean_url})
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def calendar_callback(request):
-    """Step 2 — exchange code for Calendar tokens."""
-    import base64
-    import json
-    import requests as req
-    from django.contrib.auth import get_user_model
-
-    User = get_user_model()
-    code = request.GET.get('code')
-    state = request.GET.get('state')
-
-    if not code or not state:
-        return Response({"error": "Missing code or state."}, status=400)
-
-    try:
-        state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
-        user_id = state_data.get("user_id")
-    except Exception:
-        return Response({"error": "Invalid state."}, status=400)
-
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({"error": "User not found."}, status=404)
-
-    try:
-        token_response = req.post(
-            'https://oauth2.googleapis.com/token',
-            data={
-                'code': code,
-                'client_id': os.environ.get("GOOGLE_CLIENT_ID"),
-                'client_secret': os.environ.get("GOOGLE_CLIENT_SECRET"),
-                'redirect_uri': os.environ.get(
-                    "GOOGLE_CALENDAR_REDIRECT_URI",
-                    os.environ.get("GOOGLE_REDIRECT_URI")
-                ),
-                'grant_type': 'authorization_code',
-            }
-        )
-        token_data = token_response.json()
-
-        if 'error' in token_data:
-            return Response(
-                {"error": f"Token exchange failed: {token_data.get('error_description')}"},
-                status=400
-            )
-
-        Integration.objects.update_or_create(
-            user=user,
-            provider='google_calendar',
-            defaults={
-                'access_token': token_data.get('access_token'),
-                'refresh_token': token_data.get('refresh_token', ''),
-                'is_active': True,
-            }
-        )
-
-        return Response({
-            "message": "Google Calendar connected successfully!",
-            "user": user.email,
-        })
-
     except Exception as e:
         return Response({"error": str(e)}, status=400)

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-
+import uuid
+from django.utils import timezone
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -48,7 +49,7 @@ class User(AbstractUser):
     username = None
     first_name = None
     last_name = None
-    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     full_name=models.CharField(max_length=250,null=True,blank=True)
     email = models.EmailField(unique=True)
     role = models.ForeignKey(Role,on_delete=models.SET_NULL,null=True,blank=True,related_name='users')
@@ -73,3 +74,18 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
     
+class EmailVerification(models.Model):
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="email_verification"
+    )
+
+    otp = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at

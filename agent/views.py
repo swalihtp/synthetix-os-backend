@@ -1,12 +1,14 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from .models import Agent, BuiltInAgent
+from .serializers import AgentSerializer, AgentCreateSerializer, BuiltInAgentSerializer
+from rest_framework.views import APIView
 from rest_framework.response import Response
-import httpx
-from django.conf import settings
-from .models import Agent
-from .serializers import AgentSerializer, AgentCreateSerializer
-
+from django.shortcuts import get_object_or_404
+from workflows.models import EmailExecutionResult, WorkflowForHumanReview
+from workflows.serializers import EmailAgentDashboardSerializer
+from rest_framework import filters
+from .pagination import BuiltInAgentPagination
 
 class AgentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -15,95 +17,62 @@ class AgentViewSet(viewsets.ModelViewSet):
         return Agent.objects.filter(user=self.request.user)
 
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action == "create":
             return AgentCreateSerializer
         return AgentSerializer
 
     def get_serializer_context(self):
-        return {'request': self.request}
-
-    @action(detail=False, methods=['post'], url_path='generate')
-    def generate_workflow(self, request):
-        prompt = request.data.get('prompt', '')
-        name = request.data.get('name', 'AI Generated Agent')
-
-        if not prompt:
-            return Response(
-                {"error": "prompt is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            ai_response = httpx.post(
-                f"{settings.AI_SERVICE_URL}/workflow/generate",
-                json={"prompt": prompt},
-                timeout=30.0,
-            )
-            ai_response.raise_for_status()
-            workflow_data = ai_response.json()
-
-            # DEBUG — remove after fix
-            print(f"[Generate] AI returned: {workflow_data}")
-            print(f"[Generate] Steps: {workflow_data.get('steps')}")
-
-        except Exception as e:
-            return Response(
-                {"error": f"AI service error: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-        if not workflow_data.get("steps"):
-            return Response(
-                {"error": f"AI generated invalid workflow — no steps found. Got: {workflow_data}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return {"request": self.request}
 
 
-        # Step 3 — Create Agent
-        agent = Agent.objects.create(
-            user=request.user,
-            name=name,
-            description=f"AI-generated agent: {prompt[:200]}",
-            prompt=prompt,
+class BuiltInAgentViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    queryset = BuiltInAgent.objects.all()
+    serializer_class = BuiltInAgentSerializer
+    filter_backends = [filters.SearchFilter]
+    pagination_class = BuiltInAgentPagination
+    search_fields = [
+        "name",
+        "description",
+    ]
+
+
+class EmailAgentDashboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, agent_id):
+
+        agent = get_object_or_404(Agent, id=agent_id, user=request.user)
+        processed_emails = EmailExecutionResult.objects.filter(agent=agent).count()
+
+        human_reviews = EmailExecutionResult.objects.filter(
+            agent=agent, result="HUMAN_REVIEW"
+        ).count()
+
+        pending_reviews = WorkflowForHumanReview.objects.filter(
+            agent=agent, human_choice="pending"
+        ).count()
+
+        auto_resolved = EmailExecutionResult.objects.filter(
+            agent=agent, result="AUTO_RESOLVED"
+        ).count()
+
+        auto_resolved_percentage = (
+            round((auto_resolved / processed_emails) * 100, 2)
+            if processed_emails > 0
+            else 0
         )
-        # Step 4 — Create Workflow and Steps
-        from workflows.models import Workflow, WorkflowStep
-        workflow = Workflow.objects.create(
-            agent=agent,
-            name=workflow_data.get("name", name),
-            trigger_type=workflow_data.get("trigger_type", "api.trigger"),
-            trigger_config=workflow_data.get("trigger_config", {}),
-        )
-        steps = workflow_data.get("steps", [])
-        for step_data in steps:
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                step_type=step_data.get("step_type", "system"),
-                action=step_data.get("action", ""),
-                config=step_data.get("config", {}),
-                order=step_data.get("order", 1),
-                on_failure=step_data.get("on_failure", "stop"),
-            )
-        # Step 5 — Return the created agent and workflow
-        return Response({
-            "message": "Agent and workflow created successfully!",
-            "agent": {
-                "id": str(agent.id),
-                "name": agent.name,
-                "prompt": agent.prompt,
+
+        data = {
+            "agent": AgentSerializer(agent).data,
+            "stats": {
+                "processed_emails": processed_emails,
+                "human_reviews": human_reviews,
+                "pending_reviews": pending_reviews,
+                "auto_resolved_percentage": auto_resolved_percentage,
             },
-            "workflow": {
-                "id": str(workflow.id),
-                "name": workflow.name,
-                "trigger_type": workflow.trigger_type,
-                "steps_count": len(steps),
-                "steps": [
-                    {
-                        "order": s.get("order"),
-                        "action": s.get("action"),
-                        "step_type": s.get("step_type"),
-                    }
-                    for s in steps
-                ],
-            },
-        }, status=status.HTTP_201_CREATED)
+        }
+
+        serializer = EmailAgentDashboardSerializer(data)
+
+        return Response(serializer.data)

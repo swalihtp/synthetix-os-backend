@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Agent
+from .models import Agent, BuiltInAgent
 
 
 class AgentSerializer(serializers.ModelSerializer):
@@ -20,3 +20,10 @@ class AgentCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = self.context['request'].user
         return Agent.objects.create(user=user, **validated_data)
+    
+    
+class BuiltInAgentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BuiltInAgent
+        fields = "__all__"
+        read_only_fields = ['id', 'name', 'description', 'prompt_template','workflow_configuration','required_integrations','tools','capabilities']

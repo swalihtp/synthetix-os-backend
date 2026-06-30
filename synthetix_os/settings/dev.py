@@ -4,8 +4,10 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Disable CSRF for API-only backend in development
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+]
 
-# Run Celery tasks synchronously in development (no Redis needed)
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
+
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = False

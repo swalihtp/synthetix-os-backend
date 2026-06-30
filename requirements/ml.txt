@@ -1,0 +1,17 @@
+torch
+transformers
+sentence-transformers
+numpy
+scikit-learn
+scipy
+joblib
+threadpoolctl
+tokenizers
+safetensors
+huggingface_hub
+filelock
+fsspec
+regex
+tqdm
+sympy
+networkx

@@ -1,17 +1,13 @@
 import pytest
 from django.urls import reverse
-from accounts.models import Role, Permission
+from accounts.models import Role
 
 @pytest.mark.django_db
 def test_get_profile(api_client, create_user):
 
-    permission = Permission.objects.create(
-        name="View Profile",
-        code="view_profile"
-    )
+    
 
     role = Role.objects.create(name="User")
-    role.permissions.add(permission)
 
     user = create_user(role=role)
 

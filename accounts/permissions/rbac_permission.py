@@ -24,3 +24,11 @@ class RBACPermission(BasePermission):
             return obj.user == request.user
 
         return True
+    
+class IsSystemAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.role is not None
+            and request.user.role.name == "system_admin"
+        )

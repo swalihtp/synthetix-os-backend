@@ -12,7 +12,7 @@ Synthetix OS is a Django-based automation platform with a separate FastAPI AI mi
 - `dashboard/` for the authenticated user dashboard
 - `system_admin/` for system admin statistics, user management, invitations, and usage analytics
 - `triggers/` for Gmail Pub/Sub webhook handling
-- `ai_service/` for the standalone FastAPI service that performs LLM-powered analysis tasks
+- `ai-service/` for the standalone FastAPI service that performs LLM-powered analysis tasks
 
 ## High-Level Architecture
 
@@ -99,7 +99,7 @@ Websocket:
 
 ## AI Service Routes
 
-The FastAPI service in `ai_service/` exposes:
+The FastAPI service in `ai-service/` exposes:
 
 - `GET /health`
 - `POST /api/analyze-intention`
@@ -132,12 +132,14 @@ The repository includes seeded templates for:
 Use the seeding command after creating a user:
 
 ```bash
+cd backend
 python manage.py seed_templates --email your@email.com
 ```
 
 RBAC seed command:
 
 ```bash
+cd backend
 python manage.py seed_rbac
 ```
 
@@ -167,6 +169,7 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements/core.txt
 pip install -r requirements/integrations.txt
+cd backend
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
@@ -181,7 +184,7 @@ celery -A synthetix_os beat --loglevel=info
 AI service:
 
 ```bash
-cd ai_service
+cd ai-service
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt

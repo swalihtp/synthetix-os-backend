@@ -1,4 +1,23 @@
 services:
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: synthetix_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: synthetix
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: synthetix_redis
@@ -11,12 +30,10 @@ services:
       retries: 5
 
   ai-service:
-    build: ./ai-service
+    build: ./ai_service
     container_name: synthetix_ai
     ports:
       - "8001:8001"
-    env_file:
-      - .env
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     healthcheck:
@@ -25,11 +42,13 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    env_file:
+      - .env
     volumes:
       - ai_chroma_data:/app/chroma_db
 
   backend:
-    build: ./backend
+    build: .
     container_name: synthetix_backend
     command: >
       sh -c "python manage.py migrate &&
@@ -38,6 +57,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       ai-service:
@@ -45,18 +66,21 @@ services:
     env_file:
       - .env
     environment:
+      - DB_HOST=db
+      - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - AI_SERVICE_URL=http://ai-service:8001
     restart: always
     volumes:
-      - ./backend:/app
       - chroma_data:/app/chroma_db
 
-  celery-worker:
-    build: ./backend
+  celery:
+    build: .
     container_name: synthetix_celery
     command: celery -A synthetix_os worker --loglevel=info
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       ai-service:
@@ -64,27 +88,30 @@ services:
     env_file:
       - .env
     environment:
+      - DB_HOST=db
+      - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - AI_SERVICE_URL=http://ai-service:8001
     restart: always
-    volumes:
-      - ./backend:/app
 
   celery-beat:
-    build: ./backend
+    build: .
     command: celery -A synthetix_os beat --loglevel=info
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
+      - DB_HOST=db
+      - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - AI_SERVICE_URL=http://ai-service:8001
     restart: always
-    volumes:
-      - ./backend:/app
 
 volumes:
+  postgres_data:
   chroma_data:
   ai_chroma_data:

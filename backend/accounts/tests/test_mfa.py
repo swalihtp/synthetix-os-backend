@@ -15,7 +15,29 @@ def test_enable_mfa(api_client, create_user):
 
     assert response.status_code == 200
     assert "qr_uri" in response.data
-    
+
+
+@pytest.mark.django_db
+def test_disable_mfa(api_client, create_user):
+    secret = pyotp.random_base32()
+    user = create_user(
+        mfa_secret=secret,
+        mfa_enabled=True,
+    )
+
+    api_client.force_authenticate(user=user)
+
+    url = reverse("disable-mfa")
+    otp = pyotp.TOTP(secret).now()
+
+    response = api_client.post(url, {"otp": otp})
+
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.mfa_enabled is False
+    assert user.mfa_secret is None
+
+
 @pytest.mark.django_db
 def test_verify_mfa_login(api_client, create_user):
 

@@ -34,3 +34,6 @@ def get_openrouter_api_key() -> str | None:
 
 def get_google_api_key() -> str | None:
     return get_env("GOOGLE_API_KEY")
+
+def get_model():
+    return get_env("MODEL_NAME")

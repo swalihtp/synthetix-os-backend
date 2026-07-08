@@ -184,6 +184,26 @@ class EnableMFAView(APIView):
         return Response({"qr_uri": uri})
 
 
+class DisableMFAView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [MFAThrottle]
+
+    def post(self, request):
+        user = request.user
+        otp = request.data.get("otp")
+
+        if not user.mfa_enabled:
+            return Response({"error": "MFA is not enabled"}, status=400)
+
+        if not otp or not MFAService.verify_otp(user, otp):
+            return Response({"error": "Invalid OTP"}, status=400)
+
+        user.mfa_enabled = False
+        user.mfa_secret = None
+        user.save(update_fields=["mfa_enabled", "mfa_secret"])
+        return Response({"message": "MFA disabled successfully"})
+
+
 class VerifyMFASetupView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [MFAThrottle]

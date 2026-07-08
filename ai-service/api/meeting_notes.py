@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import json
+import logging
 import re
 
 import httpx
 from fastapi import APIRouter, HTTPException
-from langchain_core.exceptions import OutputParserException
 from openai import APITimeoutError, RateLimitError
 from pydantic import BaseModel, Field, ValidationError
 
 from services.llm_service import llm
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class MeetingNotesRequest(BaseModel):
@@ -75,6 +77,26 @@ Rules:
 """
 
 
+MEETING_NOTES_JSON_INSTRUCTIONS = """
+Return ONLY valid JSON matching this schema:
+{
+  "topics": [{"topic": "", "speakers": [], "summary": ""}],
+  "decisions": [{"decision": "", "made_by": null, "context": ""}],
+  "action_items": [{"task": "", "owner": null, "due": null, "topic": ""}],
+  "meeting_summary": {
+    "title": "",
+    "summary_style": null,
+    "blockers": [],
+    "next_steps": "",
+    "summary": ""
+  }
+}
+
+Do not wrap the JSON in markdown fences.
+Do not include any extra text before or after the JSON.
+"""
+
+
 def split_text(text: str, chunk_size: int = 6000, overlap: int = 500) -> list[str]:
     cleaned_text = (text or "").strip()
     if not cleaned_text:
@@ -134,14 +156,116 @@ def _merge_text_values(values: list[str]) -> str:
     return " ".join(merged).strip()
 
 
-def summarize_chunk(
+def extract_json_from_text(text: str) -> dict:
+    cleaned_text = (text or "").strip()
+    if not cleaned_text:
+        raise ValueError("Empty model output.")
+
+    fenced_block_match = re.search(
+        r"```(?:json)?\s*(.*?)\s*```",
+        cleaned_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if fenced_block_match:
+        fenced_text = fenced_block_match.group(1).strip()
+        try:
+            parsed = json.loads(fenced_text)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    try:
+        parsed = json.loads(cleaned_text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    start_index = cleaned_text.find("{")
+    while start_index != -1:
+        depth = 0
+        in_string = False
+        escape = False
+        for index in range(start_index, len(cleaned_text)):
+            character = cleaned_text[index]
+            if in_string:
+                if escape:
+                    escape = False
+                elif character == "\\":
+                    escape = True
+                elif character == '"':
+                    in_string = False
+                continue
+
+            if character == '"':
+                in_string = True
+                continue
+
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = cleaned_text[start_index : index + 1].strip()
+                    try:
+                        parsed = json.loads(candidate)
+                        if isinstance(parsed, dict):
+                            return parsed
+                    except json.JSONDecodeError:
+                        break
+                    break
+
+        start_index = cleaned_text.find("{", start_index + 1)
+
+    raise ValueError("No valid JSON object found in model output.")
+
+
+def _get_llm_text(output) -> str:
+    if isinstance(output, str):
+        return output
+
+    content = getattr(output, "content", None)
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(str(item.get("text", item)))
+            else:
+                parts.append(str(item))
+        if parts:
+            return "\n".join(parts)
+
+    if output is None:
+        return ""
+
+    return str(output)
+
+
+def _coerce_meeting_notes_response(data) -> MeetingNotesResponse:
+    if isinstance(data, MeetingNotesResponse):
+        return data
+    if isinstance(data, dict):
+        return MeetingNotesResponse.model_validate(data)
+    if hasattr(data, "model_dump"):
+        return MeetingNotesResponse.model_validate(data.model_dump())
+    return MeetingNotesResponse.model_validate(data)
+
+
+def _build_meeting_notes_prompt(
     chunk: str,
     index: int,
     total_chunks: int,
     file_type: str | None = None,
     summary_style: str | None = None,
-) -> MeetingNotesResponse:
-    chunk_prompt = f"""
+    json_only: bool = False,
+) -> str:
+    prompt = f"""
 {SYSTEM_PROMPT_FOR_MEETING_NOTES}
 
 FILE TYPE:
@@ -157,7 +281,93 @@ TRANSCRIPT CHUNK:
 {chunk}
 """
 
-    return structured_llm.invoke(chunk_prompt)
+    if json_only:
+        prompt = f"{prompt}\n{MEETING_NOTES_JSON_INSTRUCTIONS}"
+
+    return prompt
+
+
+def _build_repair_prompt(invalid_output: str, validation_error: str) -> str:
+    return f"""
+{SYSTEM_PROMPT_FOR_MEETING_NOTES}
+
+The previous output was invalid.
+
+INVALID OUTPUT:
+{invalid_output}
+
+VALIDATION ERROR:
+{validation_error}
+
+{MEETING_NOTES_JSON_INSTRUCTIONS}
+
+Return a corrected JSON object now.
+"""
+
+
+def _parse_meeting_notes_response(raw_output: str) -> MeetingNotesResponse:
+    parsed_data = extract_json_from_text(raw_output)
+    return MeetingNotesResponse.model_validate(parsed_data)
+
+
+def _generate_meeting_notes_response(
+    prompt: str,
+) -> MeetingNotesResponse:
+    raw_text = ""
+
+    try:
+        structured_output = structured_llm.invoke(prompt)
+        response = _coerce_meeting_notes_response(structured_output)
+        logger.info("Meeting notes structured output succeeded.")
+        return response
+    except Exception:
+        logger.warning("Meeting notes structured output failed; falling back to raw JSON mode.", exc_info=True)
+
+    try:
+        raw_output = llm.invoke(prompt)
+        raw_text = _get_llm_text(raw_output)
+        logger.info("Meeting notes raw model output length: %s", len(raw_text))
+        response = _parse_meeting_notes_response(raw_text)
+        return response
+    except (ValueError, json.JSONDecodeError, ValidationError) as exc:
+        logger.warning("Meeting notes raw output parsing failed: %s", exc, exc_info=True)
+
+        repair_prompt = _build_repair_prompt(
+            invalid_output=raw_text,
+            validation_error=str(exc),
+        )
+
+        try:
+            repair_output = llm.invoke(repair_prompt)
+            repair_text = _get_llm_text(repair_output)
+            logger.info("Meeting notes repair output length: %s", len(repair_text))
+            response = _parse_meeting_notes_response(repair_text)
+            logger.info("Meeting notes repair succeeded.")
+            return response
+        except (ValueError, json.JSONDecodeError, ValidationError) as repair_exc:
+            logger.exception("Meeting notes repair failed after retry.")
+            raise HTTPException(
+                status_code=500,
+                detail="Meeting notes generation failed after retry. Please try again or switch models.",
+            ) from repair_exc
+
+
+def summarize_chunk(
+    chunk: str,
+    index: int,
+    total_chunks: int,
+    file_type: str | None = None,
+    summary_style: str | None = None,
+) -> MeetingNotesResponse:
+    chunk_prompt = _build_meeting_notes_prompt(
+        chunk=chunk,
+        index=index,
+        total_chunks=total_chunks,
+        file_type=file_type,
+        summary_style=summary_style,
+        json_only=True,
+    )
+    return _generate_meeting_notes_response(prompt=chunk_prompt)
 
 
 def merge_summaries(partial_summaries: list[MeetingNotesResponse]) -> MeetingNotesResponse:
@@ -334,7 +544,7 @@ async def generate_meeting_summary(state: MeetingNotesRequest):
             detail="Meeting summary generation timed out. Please retry with a smaller transcript or try again shortly.",
         )
 
-    except (ValidationError, OutputParserException) as exc:
+    except ValidationError as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Structured meeting notes generation failed: {exc}",
@@ -344,4 +554,8 @@ async def generate_meeting_summary(state: MeetingNotesRequest):
         raise
 
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Unexpected failure while generating meeting summary.")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate meeting summary. Please try again later.",
+        )

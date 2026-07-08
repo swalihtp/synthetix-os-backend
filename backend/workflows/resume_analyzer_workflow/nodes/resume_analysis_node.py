@@ -1,6 +1,6 @@
 from workflows.resume_analyzer_workflow.state import ResumeWorkflowState
 from workflows.resume_analyzer_workflow.services.ai.ai_service import analyze_resume
-
+from workflows.models import AIUsageLog, WorkflowExecution
 
 def resume_analysis_node(state: ResumeWorkflowState) -> ResumeWorkflowState:
     """
@@ -13,6 +13,13 @@ def resume_analysis_node(state: ResumeWorkflowState) -> ResumeWorkflowState:
         job_title=state.get("job_title"),
         job_description=state.get("job_description"),
         file_type=state.get("file_type"),
+    )
+    execution = WorkflowExecution.objects.get(id=state.get("execution_id"))
+    AIUsageLog.objects.create(
+        workflow_execution=execution,
+        provider="OPENROUTER",
+        model_name="tencent/hy3:free",
+        operation="RESUME_ANALYSIS",
     )
     return {
         **state,

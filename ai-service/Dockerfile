@@ -24,5 +24,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Production: Remove --reload for better performance
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
 
-# For development, use:
-# CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]

@@ -212,6 +212,7 @@ class MeetingNotesExecutionView(CreateAPIView):
     serializer_class = MeetingNotesInputSerializer
 
     def create(self, request, *args, **kwargs):
+        print("Made chages in meeting notes")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
